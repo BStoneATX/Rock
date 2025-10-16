@@ -1,0 +1,278 @@
+<!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
+<template>
+    <Grid :data="gridData"
+          keyField="guid"
+          itemTerm="Workflow"
+          liveUpdates
+          light
+          @addItem="onAdd">
+
+        <ReorderColumn v-if="options?.isReOrderColumnVisible" @orderChanged="onOrderChanged" />
+
+        <TextColumn name="workflowType"
+                    field="workflowType"
+                    title="Workflow Type" />
+        <TextColumn name="trigger"
+                    field="trigger"
+                    title="Trigger" />
+        <EditColumn @click="onEdit" />
+        <DeleteColumn @click="onDelete"
+                      disableConfirmation />
+    </Grid>
+
+    <Modal v-model="isModalVisible"
+           title="Select Workflow"
+           saveText="Save"
+           cancelText="Cancel"
+           :onSave="onSave">
+
+        <div class="row">
+            <div class="col-md-6">
+                <DropDownList :modelValue="theConnectionWorkflow.triggerType.toString()"
+                              @update:modelValue="val => theConnectionWorkflow.triggerType = Number(val)"
+                              :items="triggerTypes"
+                              label="Launch Workflow When"
+                              rules="required" />
+            </div>
+
+            <div class="col-md-6">
+                <WorkflowTypePicker v-model="theConnectionWorkflow.workflowType" label="Workflow Type" rules="required" />
+            </div>
+        </div>
+
+        <section v-if="theConnectionWorkflow.triggerType === ConnectionWorkflowTriggerType.StateChanged || theConnectionWorkflow.triggerType === ConnectionWorkflowTriggerType.StatusChanged">
+            <div class="row">
+                <div class="col-md-6">
+                    <DropDownList v-model="primaryQualifier"
+                                  :items="qualifierOptions"
+                                  label="From" />
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-6">
+                    <DropDownList v-model="secondaryQualifier"
+                                  :items="qualifierOptions"
+                                  label="To" />
+                </div>
+            </div>
+        </section>
+
+        <section v-else-if="theConnectionWorkflow.triggerType === ConnectionWorkflowTriggerType.ActivityAdded">
+            <div class="row">
+                <div class="col-md-4">
+                    <DropDownList v-model="primaryQualifier"
+                                  :items="qualifierOptions"
+                                  label="Activity Type" />
+                </div>
+            </div>
+        </section>
+
+        <section v-else-if="theConnectionWorkflow.triggerType === ConnectionWorkflowTriggerType.Manual">
+            <div class="row">
+                <div class="col-md-4">
+                    <RadioButtonList label="Manual Trigger Status Filter"
+                                     :modelValue="theConnectionWorkflow.manualTriggerFilterConnectionStatusId?.toString()"
+                                     @update:modelValue="val => theConnectionWorkflow.manualTriggerFilterConnectionStatusId = val ? Number(val) : null"
+                                     :items="qualifierOptions"
+                                     :horizontal="true" />
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-4">
+                    <RadioButtonList label="Applies to Age Classification"
+                                     :modelValue="theConnectionWorkflow.appliesToAgeClassification?.toString()"
+                                     @update:modelValue="val => theConnectionWorkflow.appliesToAgeClassification = val ? Number(val) : 0"
+                                     :items="appliesToAgeClassificationOptions"
+                                     :horizontal="true" />
+                </div>
+
+                <div class="col-md-4">
+                    <DataViewPicker label="Include Data View Filter" v-model="theConnectionWorkflow.includeDataViewId" :displayOnlyPersisted="true" :showBlankItem="true" />
+                </div>
+
+                <div class="col-md-4">
+                    <DataViewPicker label="Exclude Data View Filter" v-model="theConnectionWorkflow.excludeDataViewId" :displayOnlyPersisted="true" :showBlankItem="true" />
+                </div>
+            </div>
+        </section>
+    </Modal>
+</template>
+
+<script setup lang="ts">
+    import { ref, PropType, computed, watch } from "vue";
+    import Grid, { EditColumn, TextColumn, DeleteColumn, ReorderColumn } from "@Obsidian/Controls/grid";
+    import Modal from "@Obsidian/Controls/modal.obs";
+    import WorkflowTypePicker from "@Obsidian/Controls/workflowTypePicker.obs";
+    import DropDownList from "@Obsidian/Controls/dropDownList.obs";
+    import { useInvokeBlockAction } from "@Obsidian/Utility/block";
+    import { newGuid } from "@Obsidian/Utility/guid";
+    import RadioButtonList from "@Obsidian/Controls/radioButtonList.obs";
+    import DataViewPicker from "@Obsidian/Controls/dataViewPicker.obs";
+    import { ConnectionOpportunityDetailOptionsBag } from "@Obsidian/ViewModels/Blocks/Engagement/ConnectionOpportunityDetail/connectionOpportunityDetailOptionsBag";
+    import { ConnectionWorkflowBag } from "@Obsidian/ViewModels/Blocks/Engagement/ConnectionOpportunityDetail/connectionWorkflowBag";
+    import { ConnectionWorkflowTriggerTypeDescription, ConnectionWorkflowTriggerType } from "@Obsidian/Enums/Connection/connectionWorkflowTriggerType";
+    import { AppliesToAgeClassificationDescription } from "@Obsidian/Enums/Group/appliesToAgeClassification";
+    import { enumToListItemBag } from "@Obsidian/Utility/enumUtils";
+    import { ListItemBag } from "@Obsidian/ViewModels/Utility/listItemBag";
+
+    const props = defineProps({
+        modelValue: {
+            type: Array as PropType<ConnectionWorkflowBag[]>,
+            required: true
+        },
+        options: {
+            type: Object as PropType<ConnectionOpportunityDetailOptionsBag>,
+            required: true
+        },
+    });
+
+    const emit = defineEmits<{
+        (e: "update:modelValue", value: ConnectionWorkflowBag[]): void
+    }>();
+
+    const invokeBlockAction = useInvokeBlockAction();
+
+    function createNewConnectionWorkflow(): ConnectionWorkflowBag {
+        return {
+            guid: newGuid(),
+            workflowType: { text: "", value: "" },
+            triggerType: ConnectionWorkflowTriggerType.Manual,
+            qualifierValue: "",
+            manualTriggerFilterConnectionStatusId: null,
+            appliesToAgeClassification: 0,
+            includeDataViewId: null,
+            excludeDataViewId: null
+        };
+    }
+
+    // #region Values
+
+    const isModalVisible = ref(false);
+    const theConnectionWorkflow = ref<ConnectionWorkflowBag>(createNewConnectionWorkflow());
+    const triggerTypes = enumToListItemBag(ConnectionWorkflowTriggerTypeDescription);
+
+    const qualifierOptions = ref<ListItemBag[]>([]);
+    const primaryQualifier = ref<string>("");
+    const secondaryQualifier = ref<string>("");
+
+    const appliesToAgeClassificationOptions = enumToListItemBag(AppliesToAgeClassificationDescription);
+
+    // #endregion Values
+
+    // #region Computed Values
+
+    const gridData = computed(() => {
+        const rows = (props.modelValue ?? []).map(wf => ({
+            guid: wf.guid,
+            workflowType: wf.workflowType?.text ?? "",
+            trigger: ConnectionWorkflowTriggerTypeDescription[wf.triggerType] ?? ""
+        }));
+        return { rows };
+    });
+
+    // #endregion Computed Values
+
+    // #region Event Handlers
+
+    function onAdd(): void {
+        isModalVisible.value = true;
+        theConnectionWorkflow.value = createNewConnectionWorkflow();
+        primaryQualifier.value = "";
+        secondaryQualifier.value = "";
+    }
+
+    function onEdit(key: string): void {
+        const selected = (props.modelValue ?? []).find(wf => wf.guid === key);
+        if (!selected) return;
+        theConnectionWorkflow.value = { ...selected };
+        isModalVisible.value = true;
+
+        const qv = theConnectionWorkflow.value?.qualifierValue ?? "";
+        const parts = qv.split("|");
+        primaryQualifier.value = parts.length > 1 ? (parts[1] ?? "") : "";
+        secondaryQualifier.value = parts.length > 2 ? (parts[2] ?? "") : "";
+    }
+
+    function onDelete(guid: string): void {
+        isModalVisible.value = false;
+        const current = (props.modelValue ?? []).filter(wf => wf.guid !== guid);
+        emit("update:modelValue", current);
+    }
+
+    function onSave(): void {
+        if (!theConnectionWorkflow.value) {
+            return;
+        }
+
+        const primary = primaryQualifier.value ?? "";
+        const secondary = secondaryQualifier.value ?? "";
+        theConnectionWorkflow.value.qualifierValue = `|${primary}|${secondary}|`;
+
+        const current = props.modelValue ?? [];
+        const idx = current.findIndex(wf => wf.guid === theConnectionWorkflow.value?.guid);
+
+        if (idx !== -1) {
+            const updated = [...current];
+            updated.splice(idx, 1, theConnectionWorkflow.value);
+            emit("update:modelValue", updated);
+        }
+        else {
+            const updated = [...current, theConnectionWorkflow.value];
+            emit("update:modelValue", updated);
+        }
+
+        isModalVisible.value = false;
+    }
+
+    // #endregion Event Handlers
+
+    async function onOrderChanged(item: Record<string, unknown>, beforeItem: Record<string, unknown> | null): Promise<boolean> {
+        try {
+            const result = await invokeBlockAction<string>("ReorderConnectionWorkflow", {
+                key: item["guid"],
+                beforeKey: beforeItem?.["guid"] ?? null
+            });
+            return result.isSuccess;
+        }
+        catch (error) {
+            console.error("Error reordering connection workflows:", error);
+            return false;
+        }
+    }
+
+    // #region Watchers
+
+    watch(() => theConnectionWorkflow.value?.triggerType, async (trigger) => {
+        if (trigger === ConnectionWorkflowTriggerType.StatusChanged
+            || trigger === ConnectionWorkflowTriggerType.StateChanged
+            || trigger === ConnectionWorkflowTriggerType.ActivityAdded
+            || trigger === ConnectionWorkflowTriggerType.Manual) {
+            try {
+                const result = await invokeBlockAction<{ qualifierOptions: ListItemBag[] }>("GetConnectionWorkflowQualifierOptions", {
+                    triggerType: trigger
+                });
+                qualifierOptions.value = (result.isSuccess && result.data) ? (result.data.qualifierOptions ?? []) : [];
+            }
+            catch {
+                qualifierOptions.value = [];
+            }
+        }
+        else {
+            qualifierOptions.value = [];
+        }
+
+        if (trigger === ConnectionWorkflowTriggerType.ActivityAdded) {
+            secondaryQualifier.value = "";
+        }
+
+        if (trigger === ConnectionWorkflowTriggerType.Manual) {
+            qualifierOptions.value = [
+                { text: "All", value: "" },
+                ...qualifierOptions.value
+            ];
+        }
+
+    }, { immediate: true });
+
+    // #endregion Watchers
+</script>

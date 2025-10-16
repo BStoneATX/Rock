@@ -1,0 +1,177 @@
+<!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
+<template>
+    <NotificationBox :alertType="AlertType.Info">
+        Connection Request Attributes apply to requests within this opportunity. Each request will have its own values for these attributes.
+    </NotificationBox>
+
+    <Grid :data="gridData"
+          keyField="guid"
+          itemTerm="Connection Request Attribute"
+          liveUpdates
+          light
+          @addItem="onAdd">
+
+        <ReorderColumn v-if="options?.isReOrderColumnVisible" @orderChanged="onOrderChanged" />
+
+        <TextColumn name="attribute"
+                    field="attribute"
+                    title="Attribute" />
+        <TextColumn name="description"
+                    field="description"
+                    title="Description" />
+        <BooleanColumn name="isRequired"
+                       field="isRequired"
+                       title="Required" />
+        <EditColumn @click="onEdit" />
+        <DeleteColumn @click="onDelete"
+                      disableConfirmation />
+    </Grid>
+
+    <Modal v-model="isModalVisible"
+           title="Connection Request Attributes"
+           saveText="Save"
+           cancelText="Cancel"
+           :onSave="onSave">
+        <AttributeEditor v-model="theAttribute"
+                         :reservedKeyNames="reservedKeyNames" />
+    </Modal>
+</template>
+
+<script setup lang="ts">
+    import { ref, watch, PropType, computed } from "vue";
+    import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
+    import Grid, { BooleanColumn, EditColumn, TextColumn, DeleteColumn, ReorderColumn } from "@Obsidian/Controls/grid";
+    import Modal from "@Obsidian/Controls/modal.obs";
+    import AttributeEditor from "@Obsidian/Controls/attributeEditor.obs";
+    import { AlertType } from "@Obsidian/Enums/Controls/alertType";
+    import { FieldType } from "@Obsidian/SystemGuids/fieldType";
+    import { newGuid } from "@Obsidian/Utility/guid";
+    import { useInvokeBlockAction } from "@Obsidian/Utility/block";
+    import { PublicEditableAttributeBag } from "@Obsidian/ViewModels/Utility/publicEditableAttributeBag";
+    import { ConnectionOpportunityDetailOptionsBag } from "@Obsidian/ViewModels/Blocks/Engagement/ConnectionOpportunityDetail/connectionOpportunityDetailOptionsBag";
+
+    const props = defineProps({
+        modelValue: {
+            type: Array as PropType<PublicEditableAttributeBag[]>,
+            required: true
+        },
+        options: {
+            type: Object as PropType<ConnectionOpportunityDetailOptionsBag>,
+            required: true
+        }
+    });
+
+    const emit = defineEmits<{
+        (e: "update:modelValue", value: PublicEditableAttributeBag[]): void
+    }>();
+
+    const invokeBlockAction = useInvokeBlockAction();
+
+    // #region Values
+
+    const reservedKeyNames = ref<string[]>([]);
+    const isModalVisible = ref(false);
+    const theAttribute = ref<PublicEditableAttributeBag | null>(null);
+
+    //#endregion Values
+
+    // #region Computed Values
+
+    const gridData = computed(() => {
+        const rows = (props.modelValue ?? []).map(attribute => ({
+            guid: attribute.guid,
+            attribute: attribute.name,
+            description: attribute.description,
+            isRequired: attribute.isRequired
+        }));
+        return { rows };
+    });
+
+    // #endregion Computed Values
+
+    // #region Event Handlers
+
+    function onAdd(): void {
+        theAttribute.value = {
+            fieldTypeGuid: FieldType.Text
+        } as PublicEditableAttributeBag;
+        isModalVisible.value = true;
+    }
+
+    function onEdit(key: string): void {
+        const selected = (props.modelValue ?? []).find(x => x.guid === key);
+        if (selected) {
+            theAttribute.value = { ...selected };
+            isModalVisible.value = true;
+        }
+        else {
+            onAdd();
+        }
+    }
+
+    function onDelete(guid: string): void {
+        isModalVisible.value = false;
+        const current = (props.modelValue ?? []).filter(s => s.guid !== guid);
+
+        emit("update:modelValue", current);
+        reservedKeyNames.value = current.map(k => k.key!).filter(Boolean) as string[];
+    }
+
+    function onSave(): void {
+        if (!theAttribute.value) {
+            return;
+        }
+
+        const current = props.modelValue ?? [];
+        const idx = current.findIndex(a => a.guid === theAttribute.value?.guid);
+
+        if (idx !== -1) {
+            const updated = [...current];
+            updated.splice(idx, 1, theAttribute.value);
+            emit("update:modelValue", updated);
+
+        }
+        else {
+            theAttribute.value.guid = newGuid();
+            const updated = [...current, theAttribute.value];
+            emit("update:modelValue", updated);
+        }
+
+        isModalVisible.value = false;
+    }
+
+    // #endregion Event Handlers
+
+    async function onOrderChanged(item: Record<string, unknown>, beforeItem: Record<string, unknown> | null): Promise<boolean> {
+        try {
+            const result = await invokeBlockAction<string>("ReorderConnectionRequestAttribute", {
+                key: item["guid"],
+                beforeKey: beforeItem?.["guid"] ?? null
+            });
+            return result.isSuccess;
+        }
+        catch (error) {
+            console.error("Error reordering connection request attributes:", error);
+            return false;
+        }
+    }
+
+    // #region Watchers
+
+    watch(isModalVisible, () => {
+        if (isModalVisible.value) {
+            reservedKeyNames.value = reservedKeyNames.value.filter(k => k !== theAttribute.value?.key);
+        }
+        else {
+            if (theAttribute.value?.key && !reservedKeyNames.value.includes(theAttribute.value.key)) {
+                reservedKeyNames.value.push(theAttribute.value.key);
+            }
+        }
+    });
+
+    watch(() => props.modelValue, (val) => {
+        reservedKeyNames.value = (val ?? []).map(a => a.key!).filter(Boolean) as string[];
+    });
+
+    // #endregion Watchers
+</script>
