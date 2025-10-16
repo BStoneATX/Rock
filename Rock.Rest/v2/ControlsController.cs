@@ -6244,6 +6244,12 @@ namespace Rock.Rest.v2
                 // if specific group types are specified, show the groups regardless of ShowInNavigation
                 bool limitToShowInNavigation = !includedGroupTypeIds.Any();
 
+                // If explicitly limiting to included group types only and none provided, return empty.
+                if ( options.ExcludeAllByDefault && !includedGroupTypeIds.Any() )
+                {
+                    return Ok( new List<TreeItemBag>() );
+                }
+
                 Rock.Model.Group parentGroup = groupService.GetByGuid( options.Guid ?? Guid.Empty );
                 int id = parentGroup == null ? 0 : parentGroup.Id;
 

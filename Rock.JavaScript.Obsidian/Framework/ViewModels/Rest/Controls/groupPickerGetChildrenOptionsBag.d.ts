@@ -28,6 +28,9 @@ import { Guid } from "@Obsidian/Types";
  * the GroupMemberPicker control.
  */
 export type GroupPickerGetChildrenOptionsBag = {
+    /** When true, show no groups unless IncludedGroupTypeGuids has values. */
+    excludeAllByDefault: boolean;
+
     /** GUID of the group the member is part of. */
     guid?: Guid | null;
 
