@@ -4119,8 +4119,9 @@ namespace Rock.Lava
         /// <param name="randomLength">The random length.</param>
         /// <param name="categoryId">The category identifier.</param>
         /// <param name="isPinned">The isPinned indicator.</param>
+        /// <param name="expireInDays">The number of days until the short link expires.</param>
         /// <returns></returns>
-        public static string CreateShortLink( ILavaRenderContext context, object input, string token = "", int? siteId = null, bool overwrite = false, int randomLength = 10, int? categoryId = null, bool isPinned = false )
+        public static string CreateShortLink( ILavaRenderContext context, object input, string token = "", int? siteId = null, bool overwrite = false, int randomLength = 10, int? categoryId = null, bool isPinned = false, int? expireInDays = null )
         {
             // Notes: This filter attempts to return a valid shortlink at all costs
             //        this means that if the configuration passed to it is invalid
@@ -4197,6 +4198,12 @@ namespace Rock.Lava
             shortLink.Url = input.ToString();
             shortLink.CategoryId = categoryId;
             shortLink.IsPinned = isPinned;
+
+            if ( expireInDays.HasValue && expireInDays.Value >= 0 )
+            {
+                shortLink.ExpireDate = RockDateTime.Today.AddDays( expireInDays.Value );
+            }
+
             rockContext.SaveChanges();
 
             return shortLink.ShortLinkUrl;

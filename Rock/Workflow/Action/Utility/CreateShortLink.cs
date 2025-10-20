@@ -47,6 +47,7 @@ namespace Rock.Workflow.Action
         false, "", "", 5, "Attribute", new string[] { "Rock.Field.Types.TextFieldType", "Rock.Field.Types.UrlLinkFieldType" } )]
     [IntegerField( "Random Token Length", "The number of characters to use when generating a random unique token.", false, 7, "", 6 )]
     [BooleanField( "Allow Token Re-use", "If a short link already exists with the same token, should it be updated to the new URL? If this is not allowed, this action will fail due to existing short link.", true, "", 7, "Overwrite" )]
+    // TODO JMH Add integer field for "Expire In Days". This will be used to set an expiration date on the short link.
     [Rock.SystemGuid.EntityTypeGuid( "AA995907-DAC1-4B7A-ACEF-AEC6CD057E72")]
     public class CreateShortLink : ActionComponent
     {
