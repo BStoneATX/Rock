@@ -109,6 +109,9 @@ namespace Rock.Workflow.Action
     {
         #region Keys
 
+        /// <summary>
+        /// Keys to use for Attributes
+        /// </summary>
         private class AttributeKey
         {
             public const string ExpireInDays = "ExpireInDays";
