@@ -256,47 +256,46 @@
     function defineLavaCommand<T>(
         command: string,
         defineLavaCommandArgs: (
-            defineLavaCommandArg: (
-                key: keyof T,
+            defineLavaCommandArg: <K extends keyof T>(
+                key: K,
                 defaultValue: string,
-                format: (value: T[keyof T]) => string
+                format: (value: T[K]) => string
             ) => void
         ) => void
-    ): { type: T; getLava: (args: Partial<T>) => string; } {
+    ): { type: T; getLava: (args: Partial<T>) => string } {
+        // Store in a widened runtime form, but enforce types at definition time
         const lavaCommandArgDefs: {
             key: keyof T;
             defaultValue: string;
-            format: (value: T[keyof T]) => string;
+            format: (value: unknown) => string;
         }[] = [];
 
-        function defineLavaCommandArg(
-            key: keyof T,
+        const defineLavaCommandArg = <K extends keyof T>(
+            key: K,
             defaultValue: string,
-            format: (value: T[keyof T]) => string,
-        ): void {
+            format: (value: T[K]) => string
+        ): void => {
             lavaCommandArgDefs.push({
                 key,
                 defaultValue,
-                format
+                format: format as (value: unknown) => string
             });
-        }
+        };
 
         defineLavaCommandArgs(defineLavaCommandArg);
 
         return {
-            type: undefined as T,
+            type: undefined as unknown as T,
             getLava: (args: Partial<T>): string => {
                 const commandArguments: string[] = [];
                 let last = -1;
 
                 for (let i = 0; i < lavaCommandArgDefs.length; i++) {
                     const entry = lavaCommandArgDefs[i];
-                    const value = args[entry.key];
+                    const value = args[entry.key as keyof T];
 
                     if (value !== undefined) {
-                        const formattedValue = entry.format(value);
-                        commandArguments.push(formattedValue);
-
+                        commandArguments.push(entry.format(value));
                         last = i;
                     }
                     else {
@@ -304,10 +303,7 @@
                     }
                 }
 
-                if (last === -1) {
-                    return command;
-                }
-
+                if (last === -1) return command;
                 return `${command}:${commandArguments.slice(0, last + 1).join(",")}`;
             }
         };
