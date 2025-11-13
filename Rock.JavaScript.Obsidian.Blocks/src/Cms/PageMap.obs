@@ -1,0 +1,85 @@
+<!-- Copyright by the Spark Development Network; Licensed under the Rock Community License -->
+<template>
+    <NotificationBox v-if="errorMessage" alertType="danger" v-html="errorMessage"></NotificationBox>
+    <Panel :title="panelName"
+           type="block"
+           :isCollapsible="false"
+           :isInitiallyCollapsed="false">
+        <template #headerActions>
+            <DropDownMenu title="Add Page"
+                          :items="dropDownMenuItems"
+                          :align="'left'">
+                <i class="ti ti-plus"></i>
+            </DropDownMenu>
+        </template>
+        <PageTree v-model="selectedPage"
+                  :multiple="false" />
+    </Panel>
+</template>
+<script setup lang="ts">
+    import { ref } from "vue";
+    import { DetailBlockBox } from "@Obsidian/ViewModels/Blocks/detailBlockBox";
+    import { PageMapBag } from "@Obsidian/ViewModels/Blocks/Cms/PageMap/pageMapBag";
+    import { PageMapOptionsBag } from "@Obsidian/ViewModels/Blocks/Cms/PageMap/pageMapOptionsBag";
+    import { ListItemBag } from "@Obsidian/ViewModels/Utility/listItemBag";
+    import { useConfigurationValues, useInvokeBlockAction } from "@Obsidian/Utility/block";
+    import { MenuAction } from "@Obsidian/Types/Controls/dropDownMenu";
+    import NotificationBox from "@Obsidian/Controls/notificationBox.obs";
+    import Panel from "@Obsidian/Controls/panel.obs";
+    import DropDownMenu from "@Obsidian/Controls/dropDownMenu.obs";
+    import PageTree from "@Obsidian/Controls/pageTree.obs";
+
+    // #region Values
+
+    const panelName = "Pages";
+
+    const config = useConfigurationValues<DetailBlockBox<PageMapBag, PageMapOptionsBag>>();
+    const bag: PageMapBag = config.entity ?? {};
+    const options: PageMapOptionsBag = config.options ?? {};
+
+    const invokeBlockAction = useInvokeBlockAction();
+
+    const errorMessage = ref("");
+
+    const selectedPage = ref<ListItemBag | null>(null);
+    const isAddPageDropDownMenuVisible = ref(false);
+
+    const dropDownMenuItems: MenuAction[] = [
+        {
+            title: "Add Top-Level",
+            type: "default",
+            handler: async () => {
+                await createPage();
+            }
+        },
+        {
+            title: "Add Child To Selected",
+            disabled: !selectedPage.value,
+            type: "default",
+            handler: async () => {
+                await createPage(selectedPage.value);
+            }
+        }
+    ];
+
+    // #endregion Values
+
+    // #region Computed Values
+
+    async function createPage(parentPage?: ListItemBag | null): Promise<void> {
+        const result = await invokeBlockAction<string>("GetCreatePageUrl", { parentPageGuid: parentPage?.value });
+
+        if (result.isSuccess && result.data) {
+            window.location.href = result.data;
+        }
+        else if (result.errorMessage) {
+            errorMessage.value = result.errorMessage;
+        }
+        else {
+            errorMessage.value = "An unknown error occurred while attempting to create the page.";
+        }
+    }
+
+    // #endregion Computed Values
+
+</script>
