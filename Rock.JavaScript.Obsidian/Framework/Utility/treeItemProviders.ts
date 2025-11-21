@@ -502,13 +502,15 @@ export class ConnectionRequestTreeItemProvider implements ITreeItemProvider {
      * Gets the child items from the server.
      *
      * @param parentGuid The parent item whose children are retrieved.
+     * @param expandToValues The values that should be auto-expanded to.
      *
      * @returns A collection of TreeItem objects as an asynchronous operation.
      */
-    private async getItems(parentGuid?: Guid | null): Promise<TreeItemBag[]> {
+    private async getItems(parentGuid?: Guid | null, expandToValues?: string[]): Promise<TreeItemBag[]> {
         const options: ConnectionRequestPickerGetChildrenOptionsBag = {
             parentGuid,
-            securityGrantToken: this.securityGrantToken
+            securityGrantToken: this.securityGrantToken,
+            expandToValues
         };
         const url = "/api/v2/Controls/ConnectionRequestPickerGetChildren";
         const response = await post<TreeItemBag[]>(url, undefined, options);
@@ -525,8 +527,8 @@ export class ConnectionRequestTreeItemProvider implements ITreeItemProvider {
     /**
      * @inheritdoc
      */
-    async getRootItems(): Promise<TreeItemBag[]> {
-        return await this.getItems(null);
+    async getRootItems(expandToValues: string[]): Promise<TreeItemBag[]> {
+        return await this.getItems(null, expandToValues);
     }
 
     /**
