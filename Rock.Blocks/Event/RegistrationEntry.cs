@@ -24,6 +24,8 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 
+using Newtonsoft.Json.Converters;
+
 using Rock.Attribute;
 using Rock.ClientService.Core.Campus;
 using Rock.ClientService.Finance.FinancialPersonSavedAccount;
@@ -434,6 +436,14 @@ namespace Rock.Blocks.Event
             if ( !errorMessage.IsNullOrWhiteSpace() )
             {
                 return ActionBadRequest( errorMessage );
+            }
+
+            if ( !context.RegistrationSettings.IsTimeoutEnabled )
+            {
+                return ActionOk( new PersistSessionResponseBag
+                {
+                    IsTimeoutDisabled = true
+                } );
             }
 
             var session = UpsertSession( context, args, SessionStatus.PaymentPending, out errorMessage );
@@ -1543,7 +1553,7 @@ namespace Rock.Blocks.Event
                         RegistrationInstanceId = context.RegistrationSettings.RegistrationInstanceId,
                         MaxAttendees = maxAttendees,
                         IsTimeoutEnabled = context.RegistrationSettings.IsTimeoutEnabled,
-                        ExcludeReservedSpotsForRegistrationSessionGuid = args.RegistrationSessionGuid,
+                        AreRegistrationSessionsExcluded = true,
                         IsWaitListExcluded = true
                     } );
                 }
@@ -1590,7 +1600,7 @@ namespace Rock.Blocks.Event
                             RegistrationInstanceId = context.RegistrationSettings.RegistrationInstanceId,
                             MaxAttendees = maxAttendees,
                             IsTimeoutEnabled = context.RegistrationSettings.IsTimeoutEnabled,
-                            ExcludeReservedSpotsForRegistrationSessionGuid = args.RegistrationSessionGuid,
+                            AreRegistrationSessionsExcluded = true,
                             IsWaitListExcluded = true
                         } );
 
@@ -4227,6 +4237,7 @@ namespace Rock.Blocks.Event
                 LoginRequiredToRegister = context.RegistrationSettings.IsLoginRequired,
                 Session = session,
                 IsUnauthorized = isUnauthorized,
+                IsTimeoutEnabled = settings
                 SuccessViewModel = successViewModel,
                 CurrentPersonFamilyGuid = RequestContext.CurrentPerson?.PrimaryFamily?.Guid,
                 TimeoutMinutes = timeoutMinutes,

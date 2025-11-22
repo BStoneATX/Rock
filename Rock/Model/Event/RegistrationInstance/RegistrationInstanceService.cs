@@ -381,7 +381,7 @@ namespace Rock.Model
 
                 spotsRemaining -= otherRegistrantsCount;
 
-                if ( spotsRemaining > 0 && options.IsTimeoutEnabled )
+                if ( spotsRemaining > 0 && options.IsTimeoutEnabled && !options.AreRegistrationSessionsExcluded )
                 {
                     // Check the number of people that are in the process of registering right now.
                     var query = new RegistrationSessionService( Context as RockContext )

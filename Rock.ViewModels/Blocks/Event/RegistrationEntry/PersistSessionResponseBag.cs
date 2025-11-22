@@ -16,5 +16,10 @@ namespace Rock.ViewModels.Blocks.Event.RegistrationEntry
         /// Gets or sets the number of spots remaining for the registration instance.
         /// </summary>
         public int? SpotsRemaining { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether the timeout is disabled for the registration instance.
+        /// </summary>
+        public bool IsTimeoutDisabled { get; set; }
     }
 }

@@ -165,8 +165,7 @@ namespace Rock.Model
                     // Load the registration session and determine if it was expired already.
                     registrationSession = registrationSessionService.Get( sessionGuid );
                     var wasExpired = registrationSession != null && registrationSession.ExpirationDateTime < RockDateTime.Now;
-                    var oldRegistrationCount = registrationSession?.RegistrationCount ?? 0;
-                    var isNewRegistrationSession = false;
+                    bool isNewRegistrationSession;
 
                     // If the session didn't exist then create a new one, otherwise
                     // update the existing one.
@@ -174,71 +173,85 @@ namespace Rock.Model
                     {
                         registrationSession = createSession();
                         isNewRegistrationSession = true;
-
-                        // If the session didn't exist then oldRegistrationCount
-                        // was not set. If there is an existing registration tied
-                        // to the new session, then get the count of registered
-                        // previously people from that.
-                        if ( registrationSession.RegistrationId.HasValue )
-                        {
-                            oldRegistrationCount = new RegistrationRegistrantService( rockContext )
-                                .Queryable()
-                                .Where( a => a.RegistrationId == registrationSession.RegistrationId.Value
-                                    && !a.Registration.IsTemporary
-                                    && !a.OnWaitList )
-                                .Count();
-                        }
-
                         registrationSessionService.Add( registrationSession );
                     }
                     else
                     {
+                        isNewRegistrationSession = false;
                         updateSession( registrationSession );
-                    }
-
-                    // Determine the number of registrants. If the registration was
-                    // expired then we need all spots requested again. Otherwise we
-                    // just need to be able to reserve the number of new spots since
-                    // the last session save.
-                    var newRegistrantCount = wasExpired
-                        ? registrationSession.RegistrationCount
-                        : ( registrationSession.RegistrationCount - oldRegistrationCount );
-                    
-                    if ( registrationSession.RegistrationCount == 0 && newRegistrantCount == 0 )
-                    {
-                        // No registrants (all waitlisted?) so no need to create a new session.
-                        internalErrorMessage = "No registrant spots are being reserved.";
-                        return false;
                     }
 
                     // Get the context information about the registration, specifically
                     // the timeout and spots available.
-                    var context = registrationService.GetRegistrationContext( registrationSession.RegistrationInstanceId, registrationSession.RegistrationId, out internalErrorMessage );
+                    var timeoutSettings = registrationInstanceService.Queryable()
+                        .Where( ri => ri.Id == registrationSession.RegistrationInstanceId )
+                        .Select( ri => new
+                        {
+                            ri.TimeoutLengthMinutes,
+                            ri.TimeoutIsEnabled,
+                            ri.MaxAttendees
+                        } )
+                        .FirstOrDefault();
 
-                    if ( internalErrorMessage.IsNotNullOrWhiteSpace() )
+                    if ( timeoutSettings == null || !timeoutSettings.TimeoutIsEnabled )
                     {
+                        // Timeout is not enabled so no need to create a session.
+                        internalErrorMessage = "Sessions are not enabled for the registration instance.";
+
+                        if ( !isNewRegistrationSession )
+                        {
+                            // Drop the old session since there are no spots being reserved.
+                            registrationSessionService.Delete( registrationSession );
+                            rockContext.SaveChanges();
+                            return true;
+                        }
+
+                        return false;
+                    }
+                    
+                    if ( registrationSession.RegistrationCount == 0 )
+                    {
+                        // No registrants (all waitlisted?) so no need to create a new session.
+                        internalErrorMessage = "No registrant spots are being reserved.";
+
+                        if ( !isNewRegistrationSession )
+                        {
+                            // Drop the old session since there are no spots being reserved.
+                            registrationSessionService.Delete( registrationSession );
+                            rockContext.SaveChanges();
+                            return true;
+                        }
+
                         return false;
                     }
 
                     // Set the new expiration date.
-                    registrationSession.ExpirationDateTime = context.RegistrationSettings.TimeoutMinutes.HasValue
-                        ? RockDateTime.Now.AddMinutes( context.RegistrationSettings.TimeoutMinutes.Value )
+                    registrationSession.ExpirationDateTime = timeoutSettings.TimeoutLengthMinutes.HasValue
+                        ? RockDateTime.Now.AddMinutes( timeoutSettings.TimeoutLengthMinutes.Value )
                         : RockDateTime.Now.Add( RegistrationInstance.DefaultTimeoutLength );
 
                     // Handle the possibility that there is a change in the number of
                     // registrants in the session.
                     var spotsRemaining = registrationInstanceService.GetSpotsAvailable( new GetSpotsAvailableOptions
                     {
-                        RegistrationInstanceId = context.RegistrationSettings.RegistrationInstanceId,
+                        RegistrationInstanceId = registrationSession.RegistrationInstanceId,
                         ExcludeReservedSpotsForRegistrationSessionGuid = registrationSession.Guid,
-                        IsTimeoutEnabled = context.RegistrationSettings.IsTimeoutEnabled,
+                        IsTimeoutEnabled = timeoutSettings.TimeoutIsEnabled,
                         IsWaitListExcluded = true,
-                        MaxAttendees = context.RegistrationSettings.MaxAttendees
+                        MaxAttendees = timeoutSettings.MaxAttendees
                     } );
 
-                    if ( spotsRemaining.HasValue && spotsRemaining.Value < newRegistrantCount )
+                    if ( !spotsRemaining.HasValue || spotsRemaining.Value < registrationSession.RegistrationCount )
                     {
                         internalErrorMessage = "There is not enough capacity remaining for this many registrants.";
+
+                        if ( !isNewRegistrationSession )
+                        {
+                            registrationSessionService.Delete( registrationSession );
+                            rockContext.SaveChanges();
+                            return true;
+                        }
+
                         return false;
                     }
 

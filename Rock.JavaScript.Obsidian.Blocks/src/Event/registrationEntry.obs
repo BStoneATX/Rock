@@ -428,7 +428,7 @@
         const response = await invokeBlockAction<PersistSessionResponseBag>("PersistSession", {
             args: getRegistrationEntryBlockArgs()
         });
-
+        debugger;
         if (response.isSuccess && response.data) {
             const expirationDate = RockDateTime.parseISO(response.data.expirationDateTime ?? "");
             registrationEntryState.value.sessionExpirationDateMs = expirationDate?.toMilliseconds() ?? null;

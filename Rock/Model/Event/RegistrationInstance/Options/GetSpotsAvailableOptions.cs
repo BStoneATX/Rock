@@ -44,6 +44,11 @@ namespace Rock.Model.Event.RegistrationInstance.Options
         public Guid? ExcludeReservedSpotsForRegistrationSessionGuid { get; set; }
 
         /// <summary>
+        /// Gets or sets a value indicating whether registration sessions are excluded.
+        /// </summary>
+        public bool AreRegistrationSessionsExcluded { get; set; }
+
+        /// <summary>
         /// Gets or sets a value indicating whether waitlist spots should be excluded.
         /// </summary>
         public bool IsWaitListExcluded { get; set; }
